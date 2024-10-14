@@ -1,7 +1,5 @@
 from PySide6.QtWidgets import QApplication, QWidget, QTextEdit, QVBoxLayout, QHBoxLayout, QPushButton
-import sys
-sys.path.append("/Users/benjamindraper/GitHub/ULA/Plasmid_Editor")
-from ScreeningDigest_tk.functions import *
+from functions import *
 
 # Only needed for access to command line arguments
 import sys
