@@ -124,28 +124,35 @@ class MainWidget(QWidget):
         ladder_choice = "HyperLadderI"
         ladder_plotted = False
         for series in self.results_chart.series():
-            if series.name() == ladder_choice:
+            if ladder_choice in series.name():
                 ladder_plotted = True
             else:
                 self.results_chart.removeSeries(series)
         if not ladder_plotted:
             ladder = list(ladders.loc[ladder_choice].values)
             series0 = LadderGelMarkerSeries()
+            series0.setName(f"{ladder_choice}_labels")
             series1 = GelMarkerSeries()
             series1.setName(ladder_choice)
             for i in ladder:
                 series0.append(-0.5, i)
                 series1.append(0, i)
+            for series in [series0, series1]:
+                self.results_chart.addSeries(series)
+                series.attachAxis(self.results_chart.x_axis)
+                series.attachAxis(self.results_chart.y_axis)
 
         series2 = GelMarkerSeries()
         series2.setName("Sequence 1")
         series3 = GelMarkerSeries()
         series3.setName("Sequence 2")
 
-        for i, series in enumerate([series2, series3], 1):
+        data_series = [series2, series3]
+
+        for i, series in enumerate(data_series, 1):
             series.append([QPointF(i, x) for x in self.enzymes_dict[self.selected_enzyme][i]])
 
-        for series in [series0, series1, series2, series3]:
+        for series in data_series:
             self.results_chart.addSeries(series)
             series.attachAxis(self.results_chart.x_axis)
             series.attachAxis(self.results_chart.y_axis)
