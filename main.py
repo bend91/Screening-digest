@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QApplication, QWidget, QTextEdit, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
+from PySide6.QtWidgets import QApplication
 
 # Only needed for access to command line arguments
 import sys

@@ -1,5 +1,7 @@
-from PySide6.QtWidgets import QApplication, QWidget, QTextEdit, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QRadioButton, QScrollArea
-from PySide6.QtChart import QChart, QScatterSeries, QValueAxis, QLogValueAxis
+from PySide6.QtWidgets import QWidget, QTextEdit, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QRadioButton, QScrollArea, QGraphicsTextItem
+from PySide6.QtCharts import QChart, QScatterSeries, QValueAxis, QLogValueAxis, QChartView
+from PySide6.QtGui import QPainterPath, QPainter, QImage, QBrush, QPen
+from PySide6.QtCore import QRectF, QSize, Qt
 from functions import *
 
 
@@ -9,10 +11,36 @@ class DNATextEdit(QTextEdit):
         QTextEdit.__init__(self, *args, **kwargs)
 
 
+class GelMarkerSeries(QScatterSeries):
+    def __init__(self, *args, **kwargs):
+        QScatterSeries.__init__(self, *args, **kwargs)
+        marker_path = QPainterPath()
+        marker_path.addRect(QRectF(0, 0, 20, 3))
+        image = QImage(QSize(100, 100), QImage.Format_ARGB32)
+        painter = QPainter(image)
+        # painter.fillRect(image.rect(), Qt.white)
+        painter.fillPath(marker_path, Qt.black)
+        painter.end()
+        brush = QBrush(image)
+        self.setMarkerSize(20)
+        self.setMarkerShape(QScatterSeries.MarkerShapeRectangle)
+        self.setBrush(brush)
+        self.setPen(QPen(Qt.transparent))
+
+
+
 class GelPlotChart(QChart):
     def __init__(self, *args, **kwargs):
         QChart.__init__(self, *args, **kwargs)
+        # self.legend().hide()
 
+        # series = QScatterSeries()
+        # series.append(1, 1)
+        # series.append(1, 2)
+        # series.append(1, 3)
+        # series.append(1, 4)
+        # self.addSeries(series)
+        # self.createDefaultAxes()
 
 class MainWidget(QWidget):
     def __init__(self, *args, **kwargs):
@@ -21,6 +49,7 @@ class MainWidget(QWidget):
         self.enzymes_dict = {}
         self.rbutton_dict = {}
         self.selected_enzyme = None
+
 
         layout = QVBoxLayout()
         h_layout = QHBoxLayout()
@@ -31,6 +60,9 @@ class MainWidget(QWidget):
         self.text_box1 = QTextEdit()
         self.text_box2 = QTextEdit()
         self.results_layout = QHBoxLayout()
+        self.results_chart = GelPlotChart()
+        self.results_view = QChartView(self.results_chart)
+
 
         v_layout1.addWidget(label1)
         v_layout1.addWidget(self.text_box1)
@@ -48,13 +80,14 @@ class MainWidget(QWidget):
         layout.addWidget(self.submit_button)
         layout.addLayout(self.results_layout)
         self.setLayout(layout)
+        self.setGeometry(500, 500, 1000, 1000)
 
     def submit_clicked(self, *args, **kwargs):
         sequence1 = self.text_box1.toPlainText()
         sequence2 = self.text_box2.toPlainText()
         c1, c2, nc = sequence_comparison(sequence1, sequence2)
         best_cutters = identify_best_cutter(sequence1, sequence2, nc)
-        ladder = list(ladders.loc["HyperLadderI"].values)
+
         enzyme_list_widget = QWidget()
         enz_layout = QVBoxLayout()
 
@@ -68,18 +101,92 @@ class MainWidget(QWidget):
         scroll_area = QScrollArea()
         scroll_area.setWidget(enzyme_list_widget)
         self.results_layout.addWidget(scroll_area)
+        self.results_layout.addWidget(self.results_view)
+        # self.qplot_gel()
 
     def radio_button_clicked(self, *args, **kwargs):
         for k, v in self.rbutton_dict.items():
             if v.isChecked():
                 self.selected_enzyme = v.text()
+        self.qplot_gel()
 
     def qplot_gel(self, *args, **kwargs):
-        results_chart = GelPlotChart()
-        parent_scene = QGraphicsScene()
-        parent_view = QGraphicsView()
-        parent_scene.setView(parent_view)
-        self.results_layout.addWidget(parent_view)
+        # print(self.results_chart.series())
+        marker_path = QPainterPath()
+        marker_path.addRect(QRectF(0, 0, 20, 3))
+        image = QImage(QSize(100, 100), QImage.Format_ARGB32)
+        painter = QPainter(image)
+        # painter.fillRect(image.rect(), Qt.white)
+        painter.fillPath(marker_path, Qt.black)
+        painter.end()
+        brush = QBrush(image)
+
+        for series in self.results_chart.series():
+            self.results_chart.removeSeries(series)
+        ladder = list(ladders.loc["HyperLadderI"].values)
+        series0 = GelMarkerSeries()
+        series0.setBrush(QBrush(Qt.transparent))
+        series0.setPen(QPen(Qt.transparent))
+        series0.setPointLabelsVisible(True)
+        series0.setPointLabelsColor(Qt.black)
+        series0.setPointLabelsFormat("@yPoint")
+
+        series1 = GelMarkerSeries()
+        series1.setName("Ladder")
+        # series1.setMarkerSize(20)
+        # series1.setMarkerShape(QScatterSeries.MarkerShapeRectangle)
+        # series1.setBrush(brush)
+        # series1.setPen(QPen(Qt.transparent))
+        # series1.setPointLabelsVisible(True)
+        # series1.setPointLabelsColor(Qt.black)
+        # series1.setPointLabelsFormat("@yPoint")
+        series2 = GelMarkerSeries()
+        series2.setName("Sequence 1")
+        # series2.setMarkerShape(QScatterSeries.MarkerShapeRectangle)
+        # series2.setBrush(brush)
+        # series2.setPen(QPen(Qt.transparent))
+        series3 = GelMarkerSeries()
+        # series3.setMarkerShape(QScatterSeries.MarkerShapeRectangle)
+        # series3.setBrush(brush)
+        # series3.setPen(QPen(Qt.transparent))
+        series3.setName("Sequence 2")
+        # text_items = []
+
+        for i in ladder:
+            series0.append(-0.5, i)
+            series1.append(0, i)
+            # text_item = QGraphicsTextItem(str(i), parent=self.results_chart)
+            # text_item.setPos(-0.5, i)
+            # text_items.append(text_item)
+        for i in self.enzymes_dict[self.selected_enzyme][1]:
+            series2.append(1, i)
+        for i in self.enzymes_dict[self.selected_enzyme][2]:
+            series3.append(2, i)
+        x_axis = QValueAxis()
+        y_axis = QLogValueAxis()
+
+        x_axis.setGridLineVisible(False)
+        y_axis.setGridLineVisible(False)
+
+        # x_axis.setTickCount(0)
+        # y_axis.setTickCount(0)
+
+        x_axis.setRange(-1, 3)
+        y_axis.setRange(100, 15000)
+        self.results_chart.setAxisX(x_axis)
+        self.results_chart.setAxisY(y_axis)
+
+        for series in [series0, series1, series2, series3]:
+            self.results_chart.addSeries(series)
+            series.attachAxis(x_axis)
+            series.attachAxis(y_axis)
+
+        # self.results_chart.addSeries(series1)
+        # self.results_chart.addSeries(series2)
+        # self.results_chart.addSeries(series3)
+
+        # self.results_chart.createDefaultAxes()
+
         ...
 
 
