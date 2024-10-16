@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QWidget, QTextEdit, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QRadioButton, QScrollArea, QGraphicsTextItem
 from PySide6.QtCharts import QChart, QScatterSeries, QValueAxis, QLogValueAxis, QChartView
 from PySide6.QtGui import QPainterPath, QPainter, QImage, QBrush, QPen
-from PySide6.QtCore import QRectF, QSize, Qt
+from PySide6.QtCore import QRectF, QSize, Qt, QPointF
 from functions import *
 
 
@@ -28,19 +28,30 @@ class GelMarkerSeries(QScatterSeries):
         self.setPen(QPen(Qt.transparent))
 
 
+class LadderGelMarkerSeries(GelMarkerSeries):
+    def __init__(self, *args, **kwargs):
+        GelMarkerSeries.__init__(self)
+        self.setBrush(QBrush(Qt.transparent))
+        self.setPen(QPen(Qt.transparent))
+        self.setPointLabelsVisible(True)
+        self.setPointLabelsColor(Qt.black)
+        self.setPointLabelsFormat("@yPoint")
+
 
 class GelPlotChart(QChart):
     def __init__(self, *args, **kwargs):
         QChart.__init__(self, *args, **kwargs)
-        # self.legend().hide()
+        self.x_axis = QValueAxis()
+        self.y_axis = QLogValueAxis()
 
-        # series = QScatterSeries()
-        # series.append(1, 1)
-        # series.append(1, 2)
-        # series.append(1, 3)
-        # series.append(1, 4)
-        # self.addSeries(series)
-        # self.createDefaultAxes()
+        self.x_axis.setGridLineVisible(False)
+        self.y_axis.setGridLineVisible(False)
+
+        self.x_axis.setRange(-1, 3)
+        self.y_axis.setRange(100, 15000)
+        self.setAxisX(self.x_axis)
+        self.setAxisY(self.y_axis)
+
 
 class MainWidget(QWidget):
     def __init__(self, *args, **kwargs):
@@ -57,12 +68,12 @@ class MainWidget(QWidget):
         v_layout2 = QVBoxLayout()
         label1 = QLabel("Enter Sequence 1")
         label2 = QLabel("Enter Sequence 2")
-        self.text_box1 = QTextEdit()
-        self.text_box2 = QTextEdit()
+
+        self.text_box1 = DNATextEdit()
+        self.text_box2 = DNATextEdit()
         self.results_layout = QHBoxLayout()
         self.results_chart = GelPlotChart()
         self.results_view = QChartView(self.results_chart)
-
 
         v_layout1.addWidget(label1)
         v_layout1.addWidget(self.text_box1)
@@ -94,7 +105,6 @@ class MainWidget(QWidget):
         for enzyme in best_cutters:
             self.rbutton_dict[enzyme[0]] = RadioButton(enzyme[0])
             self.rbutton_dict[enzyme[0]].clicked.connect(self.radio_button_clicked)
-            # rbutton.clicked.connect(self.radio_button_clicked)
             self.enzymes_dict[enzyme[0]] = (False, enzyme[1], enzyme[2])
             enz_layout.addWidget(self.rbutton_dict[enzyme[0]])
         enzyme_list_widget.setLayout(enz_layout)
@@ -108,85 +118,37 @@ class MainWidget(QWidget):
         for k, v in self.rbutton_dict.items():
             if v.isChecked():
                 self.selected_enzyme = v.text()
-        self.qplot_gel()
+        self.plot_gel()
 
-    def qplot_gel(self, *args, **kwargs):
-        # print(self.results_chart.series())
-        marker_path = QPainterPath()
-        marker_path.addRect(QRectF(0, 0, 20, 3))
-        image = QImage(QSize(100, 100), QImage.Format_ARGB32)
-        painter = QPainter(image)
-        # painter.fillRect(image.rect(), Qt.white)
-        painter.fillPath(marker_path, Qt.black)
-        painter.end()
-        brush = QBrush(image)
-
+    def plot_gel(self, *args, **kwargs):
+        ladder_choice = "HyperLadderI"
+        ladder_plotted = False
         for series in self.results_chart.series():
-            self.results_chart.removeSeries(series)
-        ladder = list(ladders.loc["HyperLadderI"].values)
-        series0 = GelMarkerSeries()
-        series0.setBrush(QBrush(Qt.transparent))
-        series0.setPen(QPen(Qt.transparent))
-        series0.setPointLabelsVisible(True)
-        series0.setPointLabelsColor(Qt.black)
-        series0.setPointLabelsFormat("@yPoint")
+            if series.name() == ladder_choice:
+                ladder_plotted = True
+            else:
+                self.results_chart.removeSeries(series)
+        if not ladder_plotted:
+            ladder = list(ladders.loc[ladder_choice].values)
+            series0 = LadderGelMarkerSeries()
+            series1 = GelMarkerSeries()
+            series1.setName(ladder_choice)
+            for i in ladder:
+                series0.append(-0.5, i)
+                series1.append(0, i)
 
-        series1 = GelMarkerSeries()
-        series1.setName("Ladder")
-        # series1.setMarkerSize(20)
-        # series1.setMarkerShape(QScatterSeries.MarkerShapeRectangle)
-        # series1.setBrush(brush)
-        # series1.setPen(QPen(Qt.transparent))
-        # series1.setPointLabelsVisible(True)
-        # series1.setPointLabelsColor(Qt.black)
-        # series1.setPointLabelsFormat("@yPoint")
         series2 = GelMarkerSeries()
         series2.setName("Sequence 1")
-        # series2.setMarkerShape(QScatterSeries.MarkerShapeRectangle)
-        # series2.setBrush(brush)
-        # series2.setPen(QPen(Qt.transparent))
         series3 = GelMarkerSeries()
-        # series3.setMarkerShape(QScatterSeries.MarkerShapeRectangle)
-        # series3.setBrush(brush)
-        # series3.setPen(QPen(Qt.transparent))
         series3.setName("Sequence 2")
-        # text_items = []
 
-        for i in ladder:
-            series0.append(-0.5, i)
-            series1.append(0, i)
-            # text_item = QGraphicsTextItem(str(i), parent=self.results_chart)
-            # text_item.setPos(-0.5, i)
-            # text_items.append(text_item)
-        for i in self.enzymes_dict[self.selected_enzyme][1]:
-            series2.append(1, i)
-        for i in self.enzymes_dict[self.selected_enzyme][2]:
-            series3.append(2, i)
-        x_axis = QValueAxis()
-        y_axis = QLogValueAxis()
-
-        x_axis.setGridLineVisible(False)
-        y_axis.setGridLineVisible(False)
-
-        # x_axis.setTickCount(0)
-        # y_axis.setTickCount(0)
-
-        x_axis.setRange(-1, 3)
-        y_axis.setRange(100, 15000)
-        self.results_chart.setAxisX(x_axis)
-        self.results_chart.setAxisY(y_axis)
+        for i, series in enumerate([series2, series3], 1):
+            series.append([QPointF(i, x) for x in self.enzymes_dict[self.selected_enzyme][i]])
 
         for series in [series0, series1, series2, series3]:
             self.results_chart.addSeries(series)
-            series.attachAxis(x_axis)
-            series.attachAxis(y_axis)
-
-        # self.results_chart.addSeries(series1)
-        # self.results_chart.addSeries(series2)
-        # self.results_chart.addSeries(series3)
-
-        # self.results_chart.createDefaultAxes()
-
+            series.attachAxis(self.results_chart.x_axis)
+            series.attachAxis(self.results_chart.y_axis)
         ...
 
 
