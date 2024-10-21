@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import re
 import matplotlib.pyplot as plt
+from snapgene_parser import parse_snapgene_file
 
 
 ### Takes two dna sequences and compares there cut sites using the given enzyme library
@@ -222,11 +223,28 @@ def get_dna_sequence_terminal(sequence_id: str=""):
     return sequence
 
 
+def get_sequence_from_snapgene(filepath):
+    if filepath[0] in ["\"", "\'"]:
+        filepath = filepath[1:]
+    if filepath[-1] in ["\"", "\'"]:
+        filepath = filepath[:-1]
+    data = parse_snapgene_file(filepath)
+    if data["dna"]["topology"] == "circular":
+        return data["seq"]
+    else:
+        print("Currently only circular dna is supported")
+        return None
+
 
 def main():
     if debug:
         sequence1 = test_seq_1
         sequence2 = test_seq_2
+    if input("Do you want to use sequence from snapgene files (Y/N)? ") in "Yesyes":
+        sequence1_path = input("Enter full filepath to the first sequence: ")
+        sequence2_path = input("Enter full filepath to the second sequence: ")
+        sequence1 = get_sequence_from_snapgene(sequence1_path)
+        sequence2 = get_sequence_from_snapgene(sequence2_path)
     else:
         sequence1 = get_dna_sequence_terminal("Sequence 1")
         sequence2 = get_dna_sequence_terminal("Sequence 2")
