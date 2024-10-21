@@ -1,6 +1,8 @@
 # Screening-digest
 Python tool for identifying optimal enzymes to use for a screening digest.
 
+Snapgene parser has been modified from here: https://github.com/Edinburgh-Genome-Foundry/SnapGeneReader.git
+
 run "python functions.py" from command line, you will be prompted for two DNA sequences, either paths to snapgene files or manually enter the sequences. The program will find enzymes that cut in an optimal way that will distinguish between the two sequences. Currently assumes all sequences are plasmids, will introduce functionality to choose either circular or linear sequences.
 With manual entry, if copying and pasting ensure the terminal accepts more characters to be pasted than your sequence length, I ran into issues with testing as my terminal (Terminus add on in sublime text) would only accept 1024 characters being pasted which is obviously a lot smaller than a plasmid sequence.
 
