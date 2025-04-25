@@ -15,7 +15,7 @@ def main():
     main_app = MainApplication(sys.argv)
     window = MainWidget()
     window.show()
-    main_app.exec()
+    sys.exit(main_app.exec())
 
 if __name__ == "__main__":
     main()

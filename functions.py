@@ -5,13 +5,52 @@ import matplotlib.pyplot as plt
 from snapgene_parser import parse_snapgene_file
 import os
 import sys
+import datetime
 
 
-### Takes two dna sequences and compares there cut sites using the given enzyme library
-# TODO - Currently only uses enzymes that cut in both sequences and ignores ones that don't cut in one. This probably makes for a better screen as it confirms the vector is correct too so maybe no need to change
+### Takes two dna sequences and compares their cut sites using the given enzyme library
+# TODO - Currently only uses enzymes that cut in both sequences and ignores ones that don't cut in one.
+   # This probably makes for a better screen as it confirms the vector is correct too so maybe no need to change
 
+# TODO - make sequence a class
 
-debug = False
+class Sequence:
+    def __init__(self, filepath=None, sequence=None, name=None, circular=True):
+        self._file_data = None
+        self._circular = circular
+        self._enzymes = {}
+        if filepath:
+            self._file_data = parse_snapgene_file(filepath)
+            self._name = filepath[filepath.rfind('/') + 1:filepath.rfind('.')] if name is None else name
+            self._circular = self._file_data["dna"]["topology"]
+        else:
+            if sequence is not None:
+                self._file_data["seq"] = sequence
+                self._name = name
+            else:
+                raise TypeError("Provide a string for at least one of filepath or sequence")
+
+    def identify_enzymes(self):
+        self._enzymes["cutters"], self._enzymes["non_cutters"] = find_enzyme_sites(self.sequence)
+
+    @property
+    def sequence(self):
+        return self._file_data["seq"]
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def circular(self):
+        return self._circular
+
+    def get_band_sizes(self, enzyme):
+        if enzyme in self._enzymes["cutters"].keys():
+            return get_band_sizes(self._enzymes["cutters"][enzyme], len(self.sequence))
+        else:
+            return [len(sequence)]
+
 
 
 # Needed for the distributable to work
@@ -28,16 +67,7 @@ ladders_filename = get_aux_file_path("ladders.csv")
 enzyme_list = pd.read_csv(elist_filename)
 ladders = pd.read_csv(ladders_filename, index_col=0)
 
-
 sequence_validator = "ACGT"
-
-
-if debug:
-    test_seqs = {}
-    with open(get_aux_file_path("test.txt"), "r") as f:
-        for i, line in enumerate(f.readlines(), 1):
-            if len(line) > 1:
-                test_seqs[f"test_seq_{i}"] = line.strip()
 
 
 def reverse_complement(seq):
@@ -78,6 +108,7 @@ def sequence_comparison(sequence1: str, sequence2: str)->tuple:
     print(f"{len(cut_diff)} enzymes found that have a different number of cut sites in each sequence")
     return cut1_not2, cut2_not1, cut_diff
     ...
+
 
 def get_band_sizes(site_list: list, plasmid_size: int=None)->list:
     """
@@ -131,7 +162,7 @@ def find_enzyme_sites(sequence: str, circular: bool=True)->tuple:
     sequence = sequence.upper()
     rev_comp_sequence = reverse_complement(sequence)
     cutters = {}
-    non_cutters = []
+    non_cutters = {}
     idx = enzyme_list.index
     for i in idx:
         e_name = enzyme_list.loc[i, "Enzyme"]
@@ -161,7 +192,7 @@ def find_enzyme_sites(sequence: str, circular: bool=True)->tuple:
             else:
                 cutters[e_name] = [(len(sequence) - (x.end() + len(sequence) // 2)) % len(sequence) for x in rev_match2]
         if len(match) + len(rev_match) + len(match2) + len(rev_match2) == 0:
-            non_cutters.append(e_name)
+            non_cutters[e_name] = []
     return cutters, non_cutters
 
 
@@ -175,7 +206,6 @@ def terminal_gel_simulation(band_list):
     # return '|'.join([' ' * x for x in l]) + "|"
 
 
-
 def plot_gel(ladder, band_lists, enzyme):
     """
     Plots an image of the gel
@@ -187,12 +217,13 @@ def plot_gel(ladder, band_lists, enzyme):
     ax.spines["left"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
-    ax.set_xticks([0, 1, 2])
+    ax.set_xticks([0, *[i for i, _ in enumerate(band_lists, 1)]])
     ax.set_yscale("log")
     ax.set_yticks(ladder)
     ax.set_yticklabels(ladder)
     ax.set_ylim(100, 11000)
     ax.set_title(f"Digest with {enzyme}")
+    return ax
 
 
 def plot_gel_simulation(band_list, well, ax):
@@ -223,15 +254,8 @@ def identify_best_cutter(sequence_1, sequence_2, enzyme_list):
         band_list1 = get_band_sizes(v1, plasmid_size=len(sequence_1))
         band_list2 = get_band_sizes(v2, plasmid_size=len(sequence_2))
         band_comparison = compare_band_sizes(band_list1, band_list2)
-        ladder = list(ladders.loc["HyperLadderI"].values)
         if len(band_comparison) > 0:
             best_cutters.append((k1, band_list1, band_list2))
-            # print(f"Enzyme {k1} cuts differently")
-            # print(f"band(s) number {[(x[0] + 1) for x in band_comparison]} in sequence 1 are different to")
-            # print(f"band(s) number {[(x[1] + 1) for x in band_comparison]} in sequence 2")
-            # if input("Show gel simulation? ") in "Yesyes":
-            #     plot_gel(ladder, [band_list1, band_list2], k1)
-            #     plt.show()
     return best_cutters
 
 
@@ -261,26 +285,100 @@ def get_sequences_debug():
 
 
 def get_sequences():
+    sequences = []
+    add_sequence =  True
     if input("Do you want to use sequence from snapgene files (Y/N)? ") in "Yesyes":
-        sequence1_path = input("Enter full filepath to the first sequence: ")
-        sequence2_path = input("Enter full filepath to the second sequence: ")
-        sequence1 = get_sequence_from_snapgene(sequence1_path)
-        sequence2 = get_sequence_from_snapgene(sequence2_path)
+        while add_sequence:
+            temp_path = input("Enter full filepath to the sequence: ").replace("\'", "").replace("\"", "")
+            sequences.append(Sequence(temp_path))
+            # sequences.append(get_sequence_from_snapgene(temp_path))
+            if input("Add more sequences (Y/N)? ") in "Nono":
+                add_sequence = False
     else:
-        sequence1 = get_dna_sequence_terminal("Sequence 1")
-        sequence2 = get_dna_sequence_terminal("Sequence 2")
-    return sequence1, sequence2
+        while add_sequence:
+            sequence_name = input("Enter name for the sequence: ")
+            sequences.append(get_dna_sequence_terminal(sequence_name))
+        sequence1 = Sequence(sequence=get_dna_sequence_terminal("Sequence 1"))
+        sequence2 = Sequence(sequence=get_dna_sequence_terminal("Sequence 2"))
+        sequences = [sequence1, sequence2]
+    return sequences
+
+
+def identify_cutters(sequences, reference_idx=0):
+    """
+    Identifys the enzymes that produce the best distinguishing cuts between sequences while cutting in both
+    :params sequences: list of dna sequences
+    :params reference_idx: gives the index of the reference sequence to which the others are compared
+    """
+    all_best_cutters = []
+    # Identifys the best cutters for each sequence compared to a reference sequence
+    for i, sequence in enumerate(sequences):
+        if i == reference_idx:
+            continue
+        cut1, cut2, cut12 = sequence_comparison(sequences[reference_idx], sequence)
+        best_cutters = [x[0] for x in identify_best_cutter(sequences[reference_idx], sequence, cut12)]
+
+        # Identifying a common list between all sequences
+        if (reference_idx == 0 and i == 1) or (i == 0):
+            all_best_cutters = best_cutters
+        else:
+            temp_list = []
+            for e in all_best_cutters:
+                if e in best_cutters:
+                    temp_list.append(e)
+            all_best_cutters = temp_list
+    return all_best_cutters
+
+
+def get_bands_from_enzyme(enzyme, sequence, circular=True):
+    """
+    Given an enzyme and sequence, identify the cut sites
+    """
+    sequence = sequence.upper()
+    rev_comp_sequence = reverse_complement(sequence)
+    enzyme_loc = enzyme_list.loc[enzyme_list["Enzyme"] == enzyme]
+    e_seq = enzyme_loc["Recognition Sequence"]
+    cut_site_list = []
+
+    match = [x for x in re.finditer(e_seq, sequence)]
+    rev_match = [x for x in re.finditer(e_seq, rev_comp_sequence)]
+    match2 = []
+    rev_match2 = []
+
+    if circular:
+        match2 = [x for x in re.finditer(e_seq, sequence[-len(sequence) // 2:] + sequence[:-len(sequence) // 2])]
+        rev_match2 = [x for x in re.finditer(e_seq, rev_comp_sequence[-len(rev_comp_sequence) // 2:] + rev_comp_sequence[:-len(rev_comp_sequence) // 2])]
+
+    cut_site_list += [x.start() for x in match]
+    cut_site_list += [len(sequence) - x.end() for x in rev_match]
+    cut_site_list += [(x.start() + (len(sequence) // 2)) % len(sequence) for x in match2]
+    cut_site_list += [(len(sequence) - (x.end() + len(sequence) // 2)) %  len(sequence) for x in rev_match2]
+    return list(set(cut_site_list))
+
+
+# '/Users/benjamindraper/Library/CloudStorage/Dropbox/01_UCL/Archive/Plasmids/[PL00309]pLKO.B7H3sgRNA1.mCherry.dna'
+# '/Users/benjamindraper/Library/CloudStorage/Dropbox/01_UCL/Archive/Plasmids/[PL00279]pCCL[GGStuff].SFFV.RFP.dna'
+# '/Users/benjamindraper/Library/CloudStorage/Dropbox/01_UCL/Archive/Plasmids/[PL00301]pCCL.TE9_BBz.dna'
 
 
 def main():
     if debug:
-        sequennce1, sequence2 = get_sequences_debug()
+        test_seqs = {}
+        with open(get_aux_file_path("test.txt"), "r") as f:
+            for i, line in enumerate(f.readlines(), 1):
+                if len(line) > 1:
+                    test_seqs[f"test_seq_{i}"] = line.strip()
+        sequences = get_sequences_debug()
     else:
-        sequennce1, sequence2 = get_sequences()
-    c1, c2, nc = sequence_comparison(sequence1, sequence2)
-    best_cutters = identify_best_cutter(sequence1, sequence2, nc)
+        sequences = get_sequences()
+
+    for sequence in sequences:
+        sequence.identify_enzymes()
+
+    best_cutters = identify_cutters([seq.sequence for seq in sequences])
+
     print(f"{len(best_cutters)} Enzymes found that provide the best distinguishing bands: ")
-    [print(f"[{i}] {cutter[0]}") for i, cutter in enumerate(best_cutters)]
+    [print(f"[{i}] {cutter}") for i, cutter in enumerate(best_cutters)]
     ladder = list(ladders.loc["HyperLadderI"].values)
     show_gel = len(best_cutters) > 0
     while show_gel:
@@ -288,19 +386,30 @@ def main():
         try:
             show_gel_int = int(show_gel_input)
             best_cutter = best_cutters[show_gel_int]
-            plot_gel(ladder, best_cutter[1:], best_cutter[0])
+
+            bands = [seq.get_band_sizes(best_cutters[show_gel_int]) for seq in sequences]
+
+            # Might be an error if get(best_cutter[0]) returns None, will need to have a way of showing that there is no cutting
+
+            ax = plot_gel(ladder, bands, best_cutter)
+            ax.set_xticklabels(["Ladder", *[seq.name for seq in sequences]], rotation=45)
             plt.show()
+
+
+            # Can you save a matplotlib plot after plt.show()?
             if input("Save figure (Y/N)? ") in "Yesyes":
-                plot_gel(ladder, best_cutter[1:], best_cutter[0])
-                plt.tight()
-                plt.savefig(f"{best_cutter[0]}_Cut.png", bbox_inches="tight")
+                save_path = input("Enter directory in which to save figure: ")
+                if (len(save_path) > 0) and (save_path[-1] != "/"):
+                    save_path = save_path + "/"
+                date = datetime.datetime.now()
+                iso_date = "-".join([format(date.year, "04"), format(date.month, "02"), format(date.day, "02")])
+                ax = plot_gel(ladder, bands, best_cutter)
+                ax.set_xticklabels(["Ladder", *[seq.name for seq in sequences]], rotation=45)
+                plt.tight_layout()
+                plt.savefig(f"{save_path}{iso_date}_{best_cutter}_digest.svg", bbox_inches="tight")
                 plt.cla()
-                print(f"Saved to the current directory as {best_cutter[0]}_Cut.png")
+                print(f"Saved to {save_path} as {iso_date}_{best_cutter}_digest.svg")
             show_gel = input("Show another enzyme (Y/N)? ") in "Yesyes"
-            # if input("Show another enzyme (Y/N)? ") in "Yesyes":
-            #     show_gel = True
-            # else:
-            #     show_gel = False
         except ValueError:
             if show_gel_input == "q":
                 show_gel = False
@@ -309,7 +418,9 @@ def main():
 
 
 if __name__ == "__main__":
+    debug = False
     main()
+
 
 
 
